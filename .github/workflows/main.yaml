@@ -1,8 +1,7 @@
 name: CI/CD Test Suite
 
-
 on:
-  push:
+  pull_request:
     branches:
       - main  # Change to the branch you want to monitor for PRs, e.g., 'main', 'develop' 
 
@@ -20,43 +19,32 @@ jobs:
         response=$(curl -X POST "https://app.beta.api.autoflow.tools/api/v1/ci-cd/trigger/test-run/${{ secrets.BUCKET_ID }}/execute" \
         -H "CI-CD-Token: ${{ secrets.CI_CD_TOKEN }}" \
         -H "Content-Type: application/json")
-
         echo "Response: $response"
         bucket_run_id=$(echo $response | jq -r '.bucketRunID')
-
         if [ -z "$bucket_run_id" ]; then
           echo "Failed to trigger test run"
           exit 1
         fi
-
-        echo "::set-output name=bucket_run_id::$bucket_run_id"
-
+        echo "bucket_run_id=$bucket_run_id" >> $GITHUB_ENV
     - name: Poll for CI/CD Test Run Status
-      id: poll
       run: |
-        bucket_run_id=${{ steps.trigger.outputs.bucket_run_id }}
+        bucket_run_id=${{ env.bucket_run_id }}
         status=""
-
         for i in {1..30}; do
           response=$(curl -X GET "https://app.beta.api.autoflow.tools/api/v1/ci-cd/trigger/test-run/$bucket_run_id/status" \
           -H "CI-CD-Token: ${{ secrets.CI_CD_TOKEN }}" \
           -H "Content-Type: application/json")
-
           echo "Response: $response"
           status=$(echo $response | jq -r '.status')
-
           if [[ "$status" == "PASSED" || "$status" == "FAILED" ]]; then
             break
           fi
-
           echo "Status: $status. Retrying in 10 seconds..."
           sleep 10
         done
-
         if [ "$status" != "PASSED" ]; then
           echo "Test suite run failed or did not complete in time"
           exit 1
         fi
-
     - name: Test suite run completed successfully
-      run: echo "CI/CD test suite run completed successfully with status: ${{ steps.poll.outputs.status }}"
+      run: echo "CI/CD test suite run completed successfully with status: $status"
