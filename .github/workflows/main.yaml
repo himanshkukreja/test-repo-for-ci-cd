@@ -84,7 +84,8 @@ jobs:
 
     - name: Test suite run completed successfully
       if: success()
-      run: echo "CI/CD test suite run completed successfully with status: $status"
+      run: |
+        echo "CI/CD test suite run completed successfully with status: $status"
 
 
     # - name: Test suite run completed successfully
