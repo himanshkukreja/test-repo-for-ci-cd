@@ -43,10 +43,45 @@ jobs:
           echo "Status: $status. Retrying in 10 seconds..."
           sleep 10
         done
+
         if [ "$status" != "PASSED" ]; then
           echo "Test suite run failed or did not complete in time"
           exit 1
         fi
+        echo "response=$response" >> $GITHUB_ENV
+
+    - name: Send Slack Notification
+      run: |
+        response=${{ env.response }}
+        bucket_run_id=$(echo $response | jq -r '.bucketRunId')
+        bucket_id=$(echo $response | jq -r '.bucketId')
+        status=$(echo $response | jq -r '.status')
+        duration=$(echo $response | jq -r '.duration')
+        journeys=$(echo $response | jq -r '.journeys')
+
+        text="CI/CD Test Suite Run\n\n*Bucket Run ID:* $bucket_run_id\n*Bucket ID:* $bucket_id\n*Status:* $status\n*Duration:* ${duration}s\n\n*Journeys:*"
+
+        for row in $(echo "${journeys}" | jq -r '.[] | @base64'); do
+          _jq() {
+            echo ${row} | base64 --decode | jq -r ${1}
+          }
+          journey_id=$(_jq '.journeyId')
+          journey_run_id=$(_jq '.journeyRunId')
+          journey_status=$(_jq '.status')
+          report_url=$(_jq '.reportUrl')
+          journey_duration=$(_jq '.duration')
+          browser=$(_jq '.browser')
+          device=$(_jq '.device')
+          
+          text="${text}\n\n*Journey ID:* ${journey_id}\n*Journey Run ID:* ${journey_run_id}\n*Status:* ${journey_status}\n*Report URL:* ${report_url}\n*Duration:* ${journey_duration}s\n*Browser:* ${browser}\n*Device:* ${device}"
+        done
+
+        payload="{
+          \"text\": \"${text}\"
+        }"
+
+        curl -X POST -H 'Content-type: application/json' --data "${payload}" ${{ secrets.SLACK_WEBHOOK_URL }}
+
 
     - name: Test suite run completed successfully
       run: |
