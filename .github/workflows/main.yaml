@@ -46,6 +46,7 @@ jobs:
         if [ "$status" != "PASSED" ]; then
           echo "Test suite run failed or did not complete in time"
           exit 1
+        fi
 
     - name: Test suite run completed successfully
       run: |
