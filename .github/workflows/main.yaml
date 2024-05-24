@@ -69,6 +69,10 @@ jobs:
         if [ -z "$response" ]; then
           response="{}"
         fi
+        if ! echo "$response" | jq . >/dev/null 2>&1; then
+          echo "Invalid JSON in response: $response"
+          exit 1
+        fi
 
         bucket_run_id=$(echo $response | jq -r '.bucketRunId')
         status=$(echo $response | jq -r '.status')
