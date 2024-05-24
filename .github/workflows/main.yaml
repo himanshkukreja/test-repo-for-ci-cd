@@ -125,3 +125,6 @@ jobs:
         elif [ "${{ env.status }}" == "FAILED" ]; then
           echo "Test suite run failed, sending notification to Slack"
           exit 1
+        else
+          echo "Job passed successfully"
+        fi
