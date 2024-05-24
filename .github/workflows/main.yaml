@@ -49,14 +49,14 @@ jobs:
         fi
         echo "response=$response" >> $GITHUB_ENV
 
-    - name: Send Slack Notification
+   - name: Send Slack Notification
       run: |
-        response=${{ env.response }}
-        bucket_run_id=$(echo $response | jq -r '.bucketRunId')
-        bucket_id=$(echo $response | jq -r '.bucketId')
-        status=$(echo $response | jq -r '.status')
-        duration=$(echo $response | jq -r '.duration // "N/A"')
-        journeys=$(echo $response | jq -c '.journeys')
+        response='${{ env.response }}'
+        bucket_run_id=$(echo "$response" | jq -r '.bucketRunId')
+        bucket_id=$(echo "$response" | jq -r '.bucketId')
+        status=$(echo "$response" | jq -r '.status')
+        duration=$(echo "$response" | jq -r '.duration // "N/A"')
+        journeys=$(echo "$response" | jq -c '.journeys')
 
         text="CI/CD Test Suite Run\n\n*Bucket Run ID:* $bucket_run_id\n*Bucket ID:* $bucket_id\n*Status:* $status\n*Duration:* ${duration}s\n\n*Journeys:*"
 
@@ -78,8 +78,3 @@ jobs:
         payload=$(jq -n --arg text "$text" '{"text": $text}')
 
         curl -X POST -H 'Content-type: application/json' --data "$payload" ${{ secrets.SLACK_WEBHOOK_URL }}
-
-    - name: Test suite run completed successfully
-      if: success()
-      run: |
-        echo "CI/CD test suite run completed successfully with status: $status"
