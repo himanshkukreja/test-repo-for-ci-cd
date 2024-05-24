@@ -25,7 +25,6 @@ jobs:
           echo "trigger_failure=true" >> $GITHUB_ENV
         else
           echo "bucket_run_id=$bucket_run_id" >> $GITHUB_ENV
-        fi
 
     - name: Poll for CI/CD Test Run Status
       id: poll
@@ -62,7 +61,14 @@ jobs:
     - name: Send Slack Notification
       if: always()
       run: |
-        response=$(cat response.json || echo "{}")
+        if [ ! -f response.json ]; then
+          echo "{}" > response.json
+        fi
+        response=$(cat response.json)
+        if [ -z "$response" ]; then
+          response="{}"
+        fi
+
         bucket_run_id=$(echo $response | jq -r '.bucketRunId')
         status=$(echo $response | jq -r '.status')
         duration=$(echo $response | jq -r '.duration')
@@ -102,4 +108,3 @@ jobs:
         elif [ "${{ env.status }}" != "PASSED" ]; then
           echo "Job failed because test suite did not pass"
           exit 1
-        fi
