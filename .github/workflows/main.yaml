@@ -22,12 +22,19 @@ jobs:
         bucket_run_id=$(echo $response | jq -r '.bucketRunID')
         if [ -z "$bucket_run_id" ]; then
           echo "Failed to trigger test run"
-          exit 1
+          echo "trigger_failure=true" >> $GITHUB_ENV
+        else
+          echo "bucket_run_id=$bucket_run_id" >> $GITHUB_ENV
         fi
-        echo "bucket_run_id=$bucket_run_id" >> $GITHUB_ENV
 
     - name: Poll for CI/CD Test Run Status
+      id: poll
       run: |
+        if [ "${{ env.trigger_failure }}" == "true" ]; then
+          echo "Skipping polling due to trigger failure"
+          exit 0
+        fi
+
         bucket_run_id=${{ env.bucket_run_id }}
         status=""
         response=""
@@ -46,12 +53,53 @@ jobs:
 
         if [ "$status" != "PASSED" ]; then
           echo "Test suite run failed or did not complete in time"
+          echo "poll_failure=true" >> $GITHUB_ENV
+        fi
+
+        echo "response=$response" >> $GITHUB_ENV
+        echo $response > response.json
+
+    - name: Send Slack Notification
+      if: always()
+      run: |
+        response=$(cat response.json || echo "{}")
+        bucket_run_id=$(echo $response | jq -r '.bucketRunId')
+        status=$(echo $response | jq -r '.status')
+        duration=$(echo $response | jq -r '.duration')
+        journeys=$(echo $response | jq -r '.journeys // []')
+
+        message="CI/CD Test Suite Status: *${status:-"UNKNOWN"}*\n"
+        message+="Total Duration: ${duration:-0}ms\n\n"
+        message+="*Journeys:*\n"
+
+        for journey in $(echo "${journeys}" | jq -c '.[]'); do
+          journey_id=$(echo $journey | jq -r '.journeyId')
+          journey_status=$(echo $journey | jq -r '.status')
+          journey_duration=$(echo $journey | jq -r '.duration')
+          report_url=$(echo $journey | jq -r '.reportUrl')
+          browser=$(echo $journey | jq -r '.browser')
+          device=$(echo $journey | jq -r '.device')
+          message+="*Status:* ${journey_status}\n"
+          message+="*Duration:* ${journey_duration}ms\n"
+          message+="*Browser:* ${browser}\n"
+          message+="*Device:* ${device}\n"
+          message+="*Report:* <${report_url}|View Report>\n\n"
+        done
+
+        payload=$(jq -n --arg text "$message" '{"text":$text}')
+        
+        curl -X POST -H 'Content-type: application/json' --data "$payload" "${{ secrets.SLACK_WEBHOOK_URL }}"
+
+    - name: Final Job Status
+      if: always()
+      run: |
+        if [ "${{ env.trigger_failure }}" == "true" ]; then
+          echo "Job failed due to trigger failure"
+          exit 1
+        elif [ "${{ env.poll_failure }}" == "true" ]; then
+          echo "Job failed due to poll failure"
+          exit 1
+        elif [ "${{ env.status }}" != "PASSED" ]; then
+          echo "Job failed because test suite did not pass"
           exit 1
         fi
-        echo "response=$response" >> $GITHUB_ENV
-
-
-    # - name: Test suite run completed successfully
-    #   if: success()
-    #   run: |
-    #     echo "CI/CD test suite run completed successfully with status: $status"
