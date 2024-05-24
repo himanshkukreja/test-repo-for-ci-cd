@@ -3,7 +3,7 @@ name: CI/CD Test Suite
 on:
   push:
     branches:
-      - main  # Change to the branch you want to monitor for PRs, e.g., 'main', 'develop' 
+      - main  # Change to the branch you want to monitor for PRs, e.g., 'main', 'develop'
 
 jobs:
   trigger-and-poll:
@@ -55,10 +55,10 @@ jobs:
         bucket_run_id=$(echo $response | jq -r '.bucketRunId')
         bucket_id=$(echo $response | jq -r '.bucketId')
         status=$(echo $response | jq -r '.status')
-        duration=$(echo $response | jq -r '.duration')
+        duration=$(echo $response | jq -r '.duration // "N/A"')
         journeys=$(echo $response | jq -c '.journeys')
 
-        text="CI/CD Test Suite Run\n\n*Bucket Run ID:* $bucket_run_id\n*Bucket ID:* $bucket_id\n*Status:* $status\n*Duration:* ${duration:-N/A}s\n\n*Journeys:*"
+        text="CI/CD Test Suite Run\n\n*Bucket Run ID:* $bucket_run_id\n*Bucket ID:* $bucket_id\n*Status:* $status\n*Duration:* ${duration}s\n\n*Journeys:*"
 
         for row in $(echo "${journeys}" | jq -r '.[] | @base64'); do
           _jq() {
