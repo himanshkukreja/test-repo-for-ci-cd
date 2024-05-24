@@ -53,27 +53,31 @@ jobs:
       run: |
         response='${{ env.response }}'
         bucket_run_id=$(echo "$response" | jq -r '.bucketRunId')
-        bucket_id=$(echo "$response" | jq -r '.bucketId')
-        status=$(echo "$response" | jq -r '.status')
+        bucket_id=$(echo "$response" | jq -r '.bucketId // "N/A"')
+        status=$(echo "$response" | jq -r '.status // "N/A"')
         duration=$(echo "$response" | jq -r '.duration // "N/A"')
-        journeys=$(echo "$response" | jq -c '.journeys')
+        journeys=$(echo "$response" | jq -c '.journeys // []')
 
         text="CI/CD Test Suite Run\n\n*Bucket Run ID:* $bucket_run_id\n*Bucket ID:* $bucket_id\n*Status:* $status\n*Duration:* ${duration}s\n\n*Journeys:*"
 
-        for row in $(echo "${journeys}" | jq -r '.[] | @base64'); do
+        for row in $(echo "${journeys}" | jq -r '.[]? | @base64'); do
           _jq() {
             echo ${row} | base64 --decode | jq -r ${1}
           }
-          journey_id=$(_jq '.journeyId')
-          journey_run_id=$(_jq '.journeyRunId')
-          journey_status=$(_jq '.status')
+          journey_id=$(_jq '.journeyId // "N/A"')
+          journey_run_id=$(_jq '.journeyRunId // "N/A"')
+          journey_status=$(_jq '.status // "N/A"')
           report_url=$(_jq '.reportUrl // "N/A"')
           journey_duration=$(_jq '.duration // "N/A"')
-          browser=$(_jq '.browser')
-          device=$(_jq '.device')
+          browser=$(_jq '.browser // "N/A"')
+          device=$(_jq '.device // "N/A"')
           
           text="${text}\n\n*Journey ID:* ${journey_id}\n*Journey Run ID:* ${journey_run_id}\n*Status:* ${journey_status}\n*Report URL:* ${report_url}\n*Duration:* ${journey_duration}s\n*Browser:* ${browser}\n*Device:* ${device}"
         done
+
+payload=$(jq -n --arg text "$text" '{"text": $text}')
+
+curl -X POST -H 'Content-type: application/json' --data "$payload" ${{ secrets.SLACK_WEBHOOK_URL }}
 
         payload=$(jq -n --arg text "$text" '{"text": $text}')
 
