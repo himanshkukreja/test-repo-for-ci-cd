@@ -19,7 +19,7 @@ jobs:
         response=$(curl -X POST "https://app.beta.api.autoflow.tools/api/v1/ci-cd/trigger/test-run/${{ secrets.BUCKET_ID }}/execute" \
         -H "CI-CD-Token: ${{ secrets.CI_CD_TOKEN }}" \
         -H "Content-Type: application/json")
-        bucket_run_id=$(echo $response | grep -oP '"bucketRunID":"\K[^"]+')
+        bucket_run_id=$(echo $response | jq -r '.bucketRunID')
         if [ -z "$bucket_run_id" ]; then
           echo "Failed to trigger test run"
           echo "trigger_failure=true" >> $GITHUB_ENV
@@ -43,7 +43,7 @@ jobs:
           -H "CI-CD-Token: ${{ secrets.CI_CD_TOKEN }}" \
           -H "Content-Type: application/json")
           echo "Response: $response"
-          status=$(echo $response | grep -oP '"status":"\K[^"]+')
+          status=$(echo $response | jq -r '.status')
           if [[ "$status" == "PASSED" || "$status" == "FAILED" ]]; then
             break
           fi
