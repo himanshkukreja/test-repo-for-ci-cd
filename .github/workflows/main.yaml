@@ -85,6 +85,9 @@ jobs:
 
         payload=$(jq -n --arg text "$message" '{text: $text}')
 
+        # Print the payload
+        echo $payload
+
         curl -X POST -H 'Content-type: application/json' --data "$payload" "${{ secrets.SLACK_WEBHOOK_URL }}"
 
     - name: Final Job Status
