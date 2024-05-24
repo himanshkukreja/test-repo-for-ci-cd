@@ -19,7 +19,7 @@ jobs:
         response=$(curl -X POST "https://app.beta.api.autoflow.tools/api/v1/ci-cd/trigger/test-run/${{ secrets.BUCKET_ID }}/execute" \
         -H "CI-CD-Token: ${{ secrets.CI_CD_TOKEN }}" \
         -H "Content-Type: application/json")
-        bucket_run_id=$(echo $response | jq -r '.bucketRunID')
+        bucket_run_id=$(echo $response | grep -oP '"bucketRunID":"\K[^"]+')
         if [ -z "$bucket_run_id" ]; then
           echo "Failed to trigger test run"
           echo "trigger_failure=true" >> $GITHUB_ENV
@@ -43,7 +43,7 @@ jobs:
           -H "CI-CD-Token: ${{ secrets.CI_CD_TOKEN }}" \
           -H "Content-Type: application/json")
           echo "Response: $response"
-          status=$(echo $response | jq -r '.status')
+          status=$(echo $response | grep -oP '"status":"\K[^"]+')
           if [[ "$status" == "PASSED" || "$status" == "FAILED" ]]; then
             break
           fi
@@ -62,28 +62,31 @@ jobs:
     - name: Send Slack Notification
       run: |
         response=$(cat response.json)
-        status=$(echo $response | jq -r '.status')
-        duration=$(echo $response | jq -r '.duration')
-        journeys=$(echo $response | jq -c '.journeys[]')
+        status=$(echo $response | grep -oP '"status":"\K[^"]+')
+        duration=$(echo $response | grep -oP '"duration":\K\d+')
+        journeys=$(echo $response | grep -oP '"journeys":\[\K.*\](?=, "duration")')
 
         message="*CI/CD Test Suite Status:* ${status}\n"
         message+="*Total Duration:* ${duration}ms\n\n"
         message+="*Journeys:*\n"
 
-        for journey in $journeys; do
-          journey_status=$(echo $journey | jq -r '.status')
-          journey_duration=$(echo $journey | jq -r '.duration')
-          report_url=$(echo $journey | jq -r '.reportUrl')
-          browser=$(echo $journey | jq -r '.browser')
-          device=$(echo $journey | jq -r '.device')
-          message+="*Status:* ${journey_status}\n"
-          message+="*Duration:* ${journey_duration}ms\n"
-          message+="*Browser:* ${browser}\n"
-          message+="*Device:* ${device}\n"
-          message+="*Report:* <${report_url}|View Report>\n\n"
+        # Split journeys into individual journey objects
+        echo $journeys | tr '}' '\n' | while read -r journey; do
+          if [ -n "$journey" ]; then
+            journey_status=$(echo $journey | grep -oP '"status":"\K[^"]+')
+            journey_duration=$(echo $journey | grep -oP '"duration":\K\d+')
+            report_url=$(echo $journey | grep -oP '"reportUrl":"\K[^"]+')
+            browser=$(echo $journey | grep -oP '"browser":"\K[^"]+')
+            device=$(echo $journey | grep -oP '"device":"\K[^"]+')
+            message+="*Status:* ${journey_status}\n"
+            message+="*Duration:* ${journey_duration}ms\n"
+            message+="*Browser:* ${browser}\n"
+            message+="*Device:* ${device}\n"
+            message+="*Report:* <${report_url}|View Report>\n\n"
+          fi
         done
 
-        payload=$(jq -n --arg text "$message" '{text: $text}')
+        payload=$(printf '{"text": "%s"}' "$message")
 
         # Print the payload
         echo $payload
