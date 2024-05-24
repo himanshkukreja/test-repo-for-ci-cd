@@ -63,6 +63,13 @@ jobs:
         echo "response=$response" >> $GITHUB_ENV
         echo $response > response.json
 
+    - name: Debug Journey Data
+      run: |
+        response=$(cat response.json)
+        journeys=$(echo $response | jq -r '.journeys')
+        echo "Journeys data:"
+        echo "$journeys"
+
     - name: Send Slack Notification
       if: always()
       run: |
@@ -79,11 +86,11 @@ jobs:
           message="*CI/CD Test Suite Status:* ${status}\n"
           message+="*Total Duration:* ${duration}ms\n\n"
           message+="*Journeys:*\n"
-          
+
           if [ -z "$journeys" ] || [ "$journeys" = "[]" ]; then
               message+="No journeys found.\n"
           else
-            echo $journeys | jq -c '.[]' | while read -r journey; do
+            echo "$journeys" | jq -c '.[]' | while read -r journey; do
               journey_status=$(echo $journey | jq -r '.status')
               journey_duration=$(echo $journey | jq -r '.duration')
               report_url=$(echo $journey | jq -r '.reportUrl')
@@ -101,6 +108,7 @@ jobs:
         payload=$(printf '{"text": "%s"}' "$message")
         echo $payload
         curl -X POST -H 'Content-type: application/json' --data "$payload" "${{ secrets.SLACK_WEBHOOK_URL }}"
+
 
     - name: Final Job Status
       if: always()
