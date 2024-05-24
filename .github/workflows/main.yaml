@@ -60,46 +60,32 @@ jobs:
         echo $response > response.json
 
     - name: Send Slack Notification
-      if: always()
-      run: |
-        if [ ! -f response.json ]; then
-          echo "{}" > response.json
-        fi
-        response=$(cat response.json)
-        if [ -z "$response" ]; then
-          response="{}"
-        fi
-        if ! echo "$response" | jq . >/dev/null 2>&1; then
-          echo "Invalid JSON in response: $response"
-          exit 1
-        fi
+        run: |
+          response=$(cat response.json)
+          status=$(echo $response | jq -r '.status')
+          duration=$(echo $response | jq -r '.duration')
+          journeys=$(echo $response | jq -c '.journeys[]')
 
-        bucket_run_id=$(echo $response | jq -r '.bucketRunId')
-        status=$(echo $response | jq -r '.status')
-        duration=$(echo $response | jq -r '.duration')
-        journeys=$(echo $response | jq -r '.journeys // []')
+          message="*CI/CD Test Suite Status:* ${status}\n"
+          message+="*Total Duration:* ${duration}ms\n\n"
+          message+="*Journeys:*\n"
 
-        message="CI/CD Test Suite Status: *${status:-"UNKNOWN"}*\n"
-        message+="Total Duration: ${duration:-0}ms\n\n"
-        message+="*Journeys:*\n"
+          for journey in $journeys; do
+            journey_status=$(echo $journey | jq -r '.status')
+            journey_duration=$(echo $journey | jq -r '.duration')
+            report_url=$(echo $journey | jq -r '.reportUrl')
+            browser=$(echo $journey | jq -r '.browser')
+            device=$(echo $journey | jq -r '.device')
+            message+="*Status:* ${journey_status}\n"
+            message+="*Duration:* ${journey_duration}ms\n"
+            message+="*Browser:* ${browser}\n"
+            message+="*Device:* ${device}\n"
+            message+="*Report:* <${report_url}|View Report>\n\n"
+          done
 
-        for journey in $(echo "${journeys}" | jq -c '.[]'); do
-          journey_id=$(echo $journey | jq -r '.journeyId')
-          journey_status=$(echo $journey | jq -r '.status')
-          journey_duration=$(echo $journey | jq -r '.duration')
-          report_url=$(echo $journey | jq -r '.reportUrl')
-          browser=$(echo $journey | jq -r '.browser')
-          device=$(echo $journey | jq -r '.device')
-          message+="*Status:* ${journey_status}\n"
-          message+="*Duration:* ${journey_duration}ms\n"
-          message+="*Browser:* ${browser}\n"
-          message+="*Device:* ${device}\n"
-          message+="*Report:* <${report_url}|View Report>\n\n"
-        done
+          payload=$(jq -n --arg text "$message" '{text: $text}')
 
-        payload=$(jq -n --arg text "$message" '{"text":$text}')
-        
-        curl -X POST -H 'Content-type: application/json' --data "$payload" "${{ secrets.SLACK_WEBHOOK_URL }}"
+          curl -X POST -H 'Content-type: application/json' --data "$payload" "${{ secrets.SLACK_WEBHOOK_URL }}"
 
     - name: Final Job Status
       if: always()
