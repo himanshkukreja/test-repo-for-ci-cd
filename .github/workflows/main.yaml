@@ -25,6 +25,7 @@ jobs:
           echo "trigger_failure=true" >> $GITHUB_ENV
         else
           echo "bucket_run_id=$bucket_run_id" >> $GITHUB_ENV
+          echo "trigger_failure=false" >> $GITHUB_ENV
         fi
 
     - name: Poll for CI/CD Test Run Status
@@ -54,6 +55,8 @@ jobs:
         if [ "$status" != "PASSED" ]; then
           echo "Test suite run failed or did not complete in time"
           echo "poll_failure=true" >> $GITHUB_ENV
+        else
+          echo "poll_failure=false" >> $GITHUB_ENV
         fi
 
         echo "status=$status" >> $GITHUB_ENV
@@ -76,19 +79,23 @@ jobs:
           message="*CI/CD Test Suite Status:* ${status}\n"
           message+="*Total Duration:* ${duration}ms\n\n"
           message+="*Journeys:*\n"
-
-          echo $journeys | jq -c '.[]' | while read -r journey; do
-            journey_status=$(echo $journey | jq -r '.status')
-            journey_duration=$(echo $journey | jq -r '.duration')
-            report_url=$(echo $journey | jq -r '.reportUrl')
-            browser=$(echo $journey | jq -r '.browser')
-            device=$(echo $journey | jq -r '.device')
-            message+="*Status:* ${journey_status}\n"
-            message+="*Duration:* ${journey_duration}ms\n"
-            message+="*Browser:* ${browser}\n"
-            message+="*Device:* ${device}\n"
-            message+="*Report:* <${report_url}|View Report>\n\n"
-          done
+          
+          if [ -z "$journeys" ] || [ "$journeys" = "[]" ]; then
+              message+="No journeys found.\n"
+          else
+            echo $journeys | jq -c '.[]' | while read -r journey; do
+              journey_status=$(echo $journey | jq -r '.status')
+              journey_duration=$(echo $journey | jq -r '.duration')
+              report_url=$(echo $journey | jq -r '.reportUrl')
+              browser=$(echo $journey | jq -r '.browser')
+              device=$(echo $journey | jq -r '.device')
+              message+="*Status:* ${journey_status}\n"
+              message+="*Duration:* ${journey_duration}ms\n"
+              message+="*Browser:* ${browser}\n"
+              message+="*Device:* ${device}\n"
+              message+="*Report:* <${report_url}|View Report>\n\n"
+            done
+          fi
         fi
 
         payload=$(printf '{"text": "%s"}' "$message")
