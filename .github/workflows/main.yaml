@@ -56,9 +56,9 @@ jobs:
         bucket_id=$(echo $response | jq -r '.bucketId')
         status=$(echo $response | jq -r '.status')
         duration=$(echo $response | jq -r '.duration')
-        journeys=$(echo $response | jq -r '.journeys')
+        journeys=$(echo $response | jq -c '.journeys')
 
-        text="CI/CD Test Suite Run\n\n*Bucket Run ID:* $bucket_run_id\n*Bucket ID:* $bucket_id\n*Status:* $status\n*Duration:* ${duration}s\n\n*Journeys:*"
+        text="CI/CD Test Suite Run\n\n*Bucket Run ID:* $bucket_run_id\n*Bucket ID:* $bucket_id\n*Status:* $status\n*Duration:* ${duration:-N/A}s\n\n*Journeys:*"
 
         for row in $(echo "${journeys}" | jq -r '.[] | @base64'); do
           _jq() {
@@ -67,8 +67,8 @@ jobs:
           journey_id=$(_jq '.journeyId')
           journey_run_id=$(_jq '.journeyRunId')
           journey_status=$(_jq '.status')
-          report_url=$(_jq '.reportUrl')
-          journey_duration=$(_jq '.duration')
+          report_url=$(_jq '.reportUrl // "N/A"')
+          journey_duration=$(_jq '.duration // "N/A"')
           browser=$(_jq '.browser')
           device=$(_jq '.device')
           
