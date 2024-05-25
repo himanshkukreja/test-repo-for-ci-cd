@@ -82,7 +82,7 @@ jobs:
           status=$(echo $response | jq -r '.status')
           duration=$(echo $response | jq -r '.duration')
           journeys=$(echo $response | jq '.journeys')
-          
+
           message="*CI/CD Test Suite Status:* ${status}\n"
           message+="*Total Duration:* ${duration}ms\n\n"
           message+="*Journeys:*\n"
@@ -90,7 +90,7 @@ jobs:
           if [ -z "$journeys" ] || [ "$journeys" = "[]" ]; then
               message+="No journeys found.\n"
           else
-            echo "$journeys" | jq -c '.[]' | while read -r journey; do
+            for journey in $(echo "${journeys}" | jq -c '.[]'); do
               journey_status=$(echo $journey | jq -r '.status')
               journey_duration=$(echo $journey | jq -r '.duration')
               report_url=$(echo $journey | jq -r '.reportUrl')
