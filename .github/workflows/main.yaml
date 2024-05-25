@@ -90,10 +90,31 @@ jobs:
           fi
   
           # Constructing the message blocks for Slack
-          message="{\"blocks\":["
-          message+="{\"type\":\"section\",\"text\":{\"type\":\"mrkdwn\",\"text\":\"*CI/CD Test Suite Status:* ${status}\"}},"
-          message+="{\"type\":\"section\",\"text\":{\"type\":\"mrkdwn\",\"text\":\"*Total Duration:* ${duration}s\"}},"
-          message+="{\"type\":\"section\",\"text\":{\"type\":\"mrkdwn\",\"text\":\"*Journeys:*\"}}"
+          message='{
+            "blocks": [
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "*CI/CD Test Suite Status:* '"${status}"'"
+                }
+              },
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "*Total Duration:* '"${duration}"'s"
+                }
+              },
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "*Journeys:*"
+                }
+              }
+            ]
+          }'
           
           for row in $(echo "${journeys}" | jq -r '.[] | @base64'); do
               _jq() {
@@ -111,19 +132,22 @@ jobs:
               # Convert duration to seconds
               duration=$(echo "scale=3; $duration / 1000" | bc)
   
-              journey_block="{\"type\":\"section\",\"text\":{\"type\":\"mrkdwn\",\"text\":\"\`\`\`Journey ID: ${journeyId}\nJourney Run ID: ${journeyRunId}\nStatus: ${status}\nReport URL: <${reportUrl}|Report>\nDuration: ${duration}s\nBrowser: ${browser}\nDevice: ${device}\`\`\`\"}}"
+              journey_block='{
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "```Journey ID: '"${journeyId}"'\nJourney Run ID: '"${journeyRunId}"'\nStatus: '"${status}"'\nReport URL: <'"${reportUrl}"'|Report>\nDuration: '"${duration}"'s\nBrowser: '"${browser}"'\nDevice: '"${device}"'```"
+                }
+              }'
   
               # Append journey block to the message
-              message+=",${journey_block}"
+              message=$(echo $message | jq ".blocks += [$journey_block]")
           done
   
-          message+="]}"
-  
-          payload="{\"blocks\":${message}}"
+          payload=$(printf '%s' "$message")
           echo $payload
           curl -X POST -H 'Content-type: application/json' --data "$payload" "${{ secrets.SLACK_WEBHOOK_URL }}"
         fi
-
 
 
     - name: Final Job Status
