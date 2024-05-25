@@ -81,22 +81,7 @@ jobs:
           message="*CI/CD Test Suite Status:* ${status}\n"
           message+="*Total Duration:* ${duration}ms\n\n"
           message+="*Journeys:*\n"
-
-          # Iterate over journeys and format the message
-          echo "$journeys" | jq -c '.[]' | while read -r journey; do 
-            journey_status=$(echo "$journey" | jq -r '.status')
-            journey_duration=$(echo "$journey" | jq -r '.duration')
-            report_url=$(echo "$journey" | jq -r '.reportUrl')
-            browser=$(echo "$journey" | jq -r '.browser')
-            device=$(echo "$journey" | jq -r '.device')
-
-            message+="*Status:* ${journey_status}\n"
-            message+="*Duration:* ${journey_duration}ms\n"
-            message+="*Browser:* ${browser}\n"
-            message+="*Device:* ${device}\n"
-            message+="*Report:* <${report_url}|View Report>\n\n" 
-          done
-        fi
+          message+="$journeys"
 
         # Escape double quotes for the JSON payload
         message=${message//\"/\\\"}
