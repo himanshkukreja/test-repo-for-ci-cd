@@ -1,0 +1,215 @@
+name: 'CI/CD Test Suite'
+description: 'A GitHub Action to run and poll CI/CD test suites.'
+inputs:
+  bucket_id:
+    description: 'Bucket ID'
+    required: true
+  cicd_token:
+    description: 'CI/CD Token'
+    required: true
+  slack_webhook_url:
+    description: 'Slack Webhook URL'
+    required: true
+runs:
+  using: 'composite'
+  steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    - name: Trigger CI/CD Test Run
+      id: trigger
+      run: |
+        response=$(curl -X POST "https://app.beta.api.autoflow.tools/api/v1/ci-cd/trigger/test-run/${{ inputs.bucket_id }}/execute" \
+        -H "CI-CD-Token: ${{ inputs.cicd_token }}" \
+        -H "Content-Type: application/json")
+        bucket_run_id=$(echo $response | jq -r '.bucketRunID')
+        if [ -z "$bucket_run_id" ]; then
+          echo "Failed to trigger test run"
+          echo "trigger_failure=true" >> $GITHUB_ENV
+        else
+          echo "bucket_run_id=$bucket_run_id" >> $GITHUB_ENV
+          echo "trigger_failure=false" >> $GITHUB_ENV
+        fi
+
+    - name: Poll for CI/CD Test Run Status
+      id: poll
+      run: |
+        if [ "${{ env.trigger_failure }}" == "true" ]; then
+          echo "Skipping polling due to trigger failure"
+          exit 0
+        fi
+
+        bucket_run_id=${{ env.bucket_run_id }}
+        status=""
+        response=""
+        for i in {1..30}; do
+          response=$(curl -X GET "https://app.beta.api.autoflow.tools/api/v1/ci-cd/trigger/test-run/$bucket_run_id/status" \
+          -H "CI-CD-Token: ${{ inputs.cicd_token }}" \
+          -H "Content-Type: application/json")
+          echo "Response: $response"
+          status=$(echo $response | jq -r '.status')
+          if [[ "$status" == "PASSED" || "$status" == "FAILED" ]]; then
+            break
+          fi
+          echo "Status: $status. Retrying in 5 seconds..."
+          sleep 5
+        done
+
+        if [ "$status" != "PASSED" ]; then
+          echo "Test suite run failed or did not complete in time"
+          echo "poll_failure=true" >> $GITHUB_ENV
+        else
+          echo "poll_failure=false" >> $GITHUB_ENV
+        fi
+
+        echo "status=$status" >> $GITHUB_ENV
+        echo "response=$response" >> $GITHUB_ENV
+        echo $response > response.json
+
+    - name: Send Slack Notification
+      if: always()
+      run: |
+        set -e
+        response=$(cat response.json)
+        suite_name=$(echo $response | jq -r '.bucketName')
+        status=$(echo $response | jq -r '.status')
+        duration=$(echo $response | jq -r '.duration')
+        duration=$(echo "scale=3; $duration / 1000" | bc)
+
+        journeys=$(echo $response | jq '.journeys')
+
+        if [ "$status" == "PASSED" ]; then
+          status_color="good"
+        else
+          status_color="danger"
+        fi
+
+        message="{
+          \"blocks\": [
+            {
+              \"type\": \"section\",
+              \"text\": {
+                \"type\": \"mrkdwn\",
+                \"text\": \"*CI/CD Test Suite Status:* ${status}\"
+              }
+            },
+            {
+              \"type\": \"section\",
+              \"text\": {
+                \"type\": \"mrkdwn\",
+                \"text\": \"*CI/CD Test Suite Run Triggered by:* ${GITHUB_ACTOR}\"
+              }
+            },
+            {
+              \"type\": \"section\",
+              \"text\": {
+                \"type\": \"mrkdwn\",
+                \"text\": \"*Test Suite Name:* ${suite_name}\"
+              }
+            },
+            {
+              \"type\": \"section\",
+              \"text\": {
+                \"type\": \"mrkdwn\",
+                \"text\": \"*Total Duration:* ${duration}s\"
+              }
+            },
+            {
+              \"type\": \"section\",
+              \"text\": {
+                \"type\": \"mrkdwn\",
+                \"text\": \"*Journeys:*\"
+              }
+            }
+          ]
+        }"
+
+        for row in $(echo "${journeys}" | jq -r '.[] | @base64'); do
+            _jq() {
+                echo ${row} | base64 --decode | jq -r ${1}
+            }
+
+            journeyId=$(_jq '.journeyId')
+            journeyRunId=$(_jq '.journeyRunId')
+            journeyName=$(_jq '.journeyName')
+            status=$(_jq '.status')
+            reportUrl=$(_jq '.reportUrl')
+            duration=$(_jq '.duration')
+            browser=$(_jq '.browser')
+            device=$(_jq '.device')
+
+            duration=$(echo "scale=3; $duration / 1000" | bc)
+
+            if [ "$status" == "FAILED" ]; then
+              failedFlowId=$(_jq '.failedFlowData.failedFlowId')
+              failedFlowName=$(_jq '.failedFlowData.failedFlowName')
+              failedStepId=$(_jq '.failedFlowData.failedStepId')
+              failedStepName=$(_jq '.failedFlowData.failedStepName')
+              errorMessage=$(_jq '.failedFlowData.errorMesssage')
+
+              journey_block=$(jq -n \
+                --arg journeyId "$journeyId" \
+                --arg journeyRunId "$journeyRunId" \
+                --arg journeyName "$journeyName" \
+                --arg status "$status" \
+                --arg reportUrl "$reportUrl" \
+                --arg duration "${duration}s" \
+                --arg browser "$browser" \
+                --arg device "$device" \
+                --arg failedFlowId "$failedFlowId" \
+                --arg failedFlowName "$failedFlowName" \
+                --arg failedStepId "$failedStepId" \
+                --arg failedStepName "$failedStepName" \
+                --arg errorMessage "$errorMessage" \
+                '{
+                  type: "section",
+                  text: {
+                    type: "mrkdwn",
+                    text: ("```Journey ID: " + $journeyId + "\nJourney Run ID: " + $journeyRunId + "\nJourney Name: " + $journeyName + "\nStatus: " + $status + "\nReport URL: <" + $reportUrl + "|Report>\nDuration: " + $duration + "\nBrowser: " + $browser + "\nDevice: " + $device + "\n\nFailed Flow ID: " + $failedFlowId + "\nFailed Flow Name: " + $failedFlowName + "\nFailed Step ID: " + $failedStepId + "\nFailed Step Name: " + $failedStepName + "\nError Message: " + $errorMessage + "```")
+                  }
+                }')
+            else
+              journey_block=$(jq -n \
+                --arg journeyId "$journeyId" \
+                --arg journeyRunId "$journeyRunId" \
+                --arg journeyName "$journeyName" \
+                --arg status "$status" \
+                --arg reportUrl "$reportUrl" \
+                --arg duration "${duration}s" \
+                --arg browser "$browser" \
+                --arg device "$device" \
+                '{
+                  type: "section",
+                  text: {
+                    type: "mrkdwn",
+                    text: ("```Journey ID: " + $journeyId + "\nJourney Run ID: " + $journeyRunId + "\nJourney Name: " + $journeyName + "\nStatus: " + $status + "\nReport URL: <" + $reportUrl + "|Report>\nDuration: " + $duration + "\nBrowser: " + $browser + "\nDevice: " + $device + "```")
+                  }
+                }')
+            fi
+
+            message=$(echo $message | jq ".blocks += [$journey_block]")
+        done
+
+        payload=$(printf '%s' "$message")
+        echo "Payload to be sent to Slack:"
+        echo $payload
+        curl -X POST -H 'Content-type: application/json' --data "$payload" "${{ inputs.slack_webhook_url }}"
+
+    - name: Final Job Status
+      if: always()
+      run: |
+        if [ "${{ env.trigger_failure }}" == "true" ]; then
+          echo "Job failed due to trigger failure"
+          exit 1
+        elif [ "${{ env.poll_failure }}" == "true" ]; then
+          echo "Job failed due to poll failure"
+          exit 1
+        elif [ "${{ env.status }}" != "PASSED" ]; then
+          echo "Job failed because test suite did not pass"
+          exit 1
+        elif [ "${{ env.status }}" == "FAILED" ]; then
+          echo "Test suite run failed, sending notification to Slack"
+          exit 1
+        else
+          echo "Job passed successfully"
+        fi
