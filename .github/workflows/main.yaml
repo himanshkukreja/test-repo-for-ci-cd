@@ -72,6 +72,7 @@ jobs:
           message=":x: *CI/CD Test Suite Polling Failed*"
         else
           response=$(cat response.json)
+          suite_name=$(echo $response | jq -r '.bucketName')
           status=$(echo $response | jq -r '.status')
           duration=$(echo $response | jq -r '.duration')
           # Convert duration to seconds
@@ -92,11 +93,26 @@ jobs:
           # Constructing the message blocks for Slack
           message='{
             "blocks": [
+
               {
                 "type": "section",
                 "text": {
                   "type": "mrkdwn",
                   "text": "*CI/CD Test Suite Status:* '"${status}"'"
+                }
+              },
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "*CI/CD Test Suite Run Trigger by:* '"${{ github.actor }}"'"
+                }
+              },
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "*Test Suite Name:* '"${suite_name}"'"
                 }
               },
               {
@@ -132,17 +148,57 @@ jobs:
               # Convert duration to seconds
               duration=$(echo "scale=3; $duration / 1000" | bc)
   
-              journey_block='{
-                "type": "section",
-                "text": {
-                  "type": "mrkdwn",
-                  "text": "```Journey ID: '"${journeyId}"'\nJourney Run ID: '"${journeyRunId}"'\nStatus: '"${status}"'\nReport URL: <'"${reportUrl}"'|Report>\nDuration: '"${duration}"'s\nBrowser: '"${browser}"'\nDevice: '"${device}"'```"
-                }
-              }'
-  
+              if [ "$status" == "FAILED" ]; then
+                failedFlowId=$(_jq '.failedFlowData.failedFlowId')
+                failedFlowName=$(_jq '.failedFlowData.failedFlowName')
+                failedStepId=$(_jq '.failedFlowData.failedStepId')
+                failedStepName=$(_jq '.failedFlowData.failedStepName')
+                errorMessage=$(_jq '.failedFlowData.errorMesssage')
+
+                journey_block=$(jq -n \
+                  --arg journeyId "$journeyId" \
+                  --arg journeyRunId "$journeyRunId" \
+                  --arg journeyName "$journeyName" \
+                  --arg status "$status" \
+                  --arg reportUrl "$reportUrl" \
+                  --arg duration "${duration}s" \
+                  --arg browser "$browser" \
+                  --arg device "$device" \
+                  --arg failedFlowId "$failedFlowId" \
+                  --arg failedFlowName "$failedFlowName" \
+                  --arg failedStepId "$failedStepId" \
+                  --arg failedStepName "$failedStepName" \
+                  --arg errorMessage "$errorMessage" \
+                  '{
+                    type: "section",
+                    text: {
+                      type: "mrkdwn",
+                      text: ("```Journey ID: " + $journeyId + "\nJourney Run ID: " + $journeyRunId + "\nJourney Name: " + $journeyName + "\nStatus: " + $status + "\nReport URL: <" + $reportUrl + "|Report>\nDuration: " + $duration + "\nBrowser: " + $browser + "\nDevice: " + $device + "\n\nFailed Flow ID: " + $failedFlowId + "\nFailed Flow Name: " + $failedFlowName + "\nFailed Step ID: " + $failedStepId + "\nFailed Step Name: " + $failedStepName + "\nError Message: " + $errorMessage + "```")
+                    }
+                  }')
+              else
+                journey_block=$(jq -n \
+                  --arg journeyId "$journeyId" \
+                  --arg journeyRunId "$journeyRunId" \
+                  --arg journeyName "$journeyName" \
+                  --arg status "$status" \
+                  --arg reportUrl "$reportUrl" \
+                  --arg duration "${duration}s" \
+                  --arg browser "$browser" \
+                  --arg device "$device" \
+                  '{
+                    type: "section",
+                    text: {
+                      type: "mrkdwn",
+                      text: ("```Journey ID: " + $journeyId + "\nJourney Run ID: " + $journeyRunId + "\nJourney Name: " + $journeyName + "\nStatus: " + $status + "\nReport URL: <" + $reportUrl + "|Report>\nDuration: " + $duration + "\nBrowser: " + $browser + "\nDevice: " + $device + "```")
+                    }
+                  }')
+              fi
+
               # Append journey block to the message
               message=$(echo $message | jq ".blocks += [$journey_block]")
           done
+
   
           payload=$(printf '%s' "$message")
           echo $payload
