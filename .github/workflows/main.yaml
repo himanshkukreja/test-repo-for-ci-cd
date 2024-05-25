@@ -91,46 +91,45 @@ jobs:
           fi
   
           # Constructing the message blocks for Slack
-          message='{
-            "blocks": [
-
+          message="{
+            \"blocks\": [
               {
-                "type": "section",
-                "text": {
-                  "type": "mrkdwn",
-                  "text": "*CI/CD Test Suite Status:* '"${status}"'"
+                \"type\": \"section\",
+                \"text\": {
+                  \"type\": \"mrkdwn\",
+                  \"text\": \"*CI/CD Test Suite Status:* ${status}\"
                 }
               },
               {
-                "type": "section",
-                "text": {
-                  "type": "mrkdwn",
-                  "text": "*CI/CD Test Suite Run Trigger by:* '"${{ github.actor }}"'"
+                \"type\": \"section\",
+                \"text\": {
+                  \"type\": \"mrkdwn\",
+                  \"text\": \"*CI/CD Test Suite Run Trigger by:* ${GITHUB_ACTOR}\"
                 }
               },
               {
-                "type": "section",
-                "text": {
-                  "type": "mrkdwn",
-                  "text": "*Test Suite Name:* '"${suite_name}"'"
+                \"type\": \"section\",
+                \"text\": {
+                  \"type\": \"mrkdwn\",
+                  \"text\": \"*Test Suite Name:* ${suite_name}\"
                 }
               },
               {
-                "type": "section",
-                "text": {
-                  "type": "mrkdwn",
-                  "text": "*Total Duration:* '"${duration}"'s"
+                \"type\": \"section\",
+                \"text\": {
+                  \"type\": \"mrkdwn\",
+                  \"text\": \"*Total Duration:* ${duration}s\"
                 }
               },
               {
-                "type": "section",
-                "text": {
-                  "type": "mrkdwn",
-                  "text": "*Journeys:*"
+                \"type\": \"section\",
+                \"text\": {
+                  \"type\": \"mrkdwn\",
+                  \"text\": \"*Journeys:*\"
                 }
               }
             ]
-          }'
+          }"
           
           for row in $(echo "${journeys}" | jq -r '.[] | @base64'); do
               _jq() {
