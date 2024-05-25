@@ -90,25 +90,26 @@ jobs:
           if [ -z "$journeys" ] || [ "$journeys" = "[]" ]; then
               message+="No journeys found.\n"
           else
-            echo "$journeys" | jq -c '.[]' | while read -r journey; do
-              journey_status=$(echo $journey | jq -r '.status')
-              journey_duration=$(echo $journey | jq -r '.duration')
-              report_url=$(echo $journey | jq -r '.reportUrl')
-              browser=$(echo $journey | jq -r '.browser')
-              device=$(echo $journey | jq -r '.device')
-              message+="*Status:* ${journey_status}\n"
-              message+="*Duration:* ${journey_duration}ms\n"
-              message+="*Browser:* ${browser}\n"
-              message+="*Device:* ${device}\n"
-              message+="*Report:* <${report_url}|View Report>\n\n"
+            journey_message=""
+            for journey in $(echo "$journeys" | jq -c '.[]'); do
+              journey_status=$(echo "$journey" | jq -r '.status')
+              journey_duration=$(echo "$journey" | jq -r '.duration')
+              report_url=$(echo "$journey" | jq -r '.reportUrl')
+              browser=$(echo "$journey" | jq -r '.browser')
+              device=$(echo "$journey" | jq -r '.device')
+              journey_message+="*Status:* ${journey_status}\n"
+              journey_message+="*Duration:* ${journey_duration}ms\n"
+              journey_message+="*Browser:* ${browser}\n"
+              journey_message+="*Device:* ${device}\n"
+              journey_message+="*Report:* <${report_url}|View Report>\n\n"
             done
+            message+="$journey_message"
           fi
         fi
 
         payload=$(printf '{"text": "%s"}' "$message")
-        echo $payload
+        echo "$payload"
         curl -X POST -H 'Content-type: application/json' --data "$payload" "${{ secrets.SLACK_WEBHOOK_URL }}"
-
 
     - name: Final Job Status
       if: always()
