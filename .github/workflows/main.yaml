@@ -66,6 +66,8 @@ jobs:
     - name: Send Slack Notification
       if: always()
       run: |
+        set -e
+
         if [ "${{ env.trigger_failure }}" == "true" ]; then
           message=":x: *CI/CD Test Suite Trigger Failed*"
         elif [ "${{ env.poll_failure }}" == "true" ]; then
@@ -77,9 +79,9 @@ jobs:
           duration=$(echo $response | jq -r '.duration')
           # Convert duration to seconds
           duration=$(echo "scale=3; $duration / 1000" | bc)
-  
+
           journeys=$(echo $response | jq '.journeys')
-  
+
           echo "Journeys data:"
           echo "$journeys"
           
@@ -89,7 +91,7 @@ jobs:
           else
             status_color="danger"
           fi
-  
+
           # Constructing the message blocks for Slack
           message="{
             \"blocks\": [
@@ -104,7 +106,7 @@ jobs:
                 \"type\": \"section\",
                 \"text\": {
                   \"type\": \"mrkdwn\",
-                  \"text\": \"*CI/CD Test Suite Run Trigger by:* ${GITHUB_ACTOR}\"
+                  \"text\": \"*CI/CD Test Suite Run Triggered by:* ${GITHUB_ACTOR}\"
                 }
               },
               {
@@ -135,18 +137,19 @@ jobs:
               _jq() {
                   echo ${row} | base64 --decode | jq -r ${1}
               }
-  
+
               journeyId=$(_jq '.journeyId')
               journeyRunId=$(_jq '.journeyRunId')
+              journeyName=$(_jq '.journeyName')
               status=$(_jq '.status')
               reportUrl=$(_jq '.reportUrl')
               duration=$(_jq '.duration')
               browser=$(_jq '.browser')
               device=$(_jq '.device')
-  
+
               # Convert duration to seconds
               duration=$(echo "scale=3; $duration / 1000" | bc)
-  
+
               if [ "$status" == "FAILED" ]; then
                 failedFlowId=$(_jq '.failedFlowData.failedFlowId')
                 failedFlowName=$(_jq '.failedFlowData.failedFlowName')
@@ -198,12 +201,11 @@ jobs:
               message=$(echo $message | jq ".blocks += [$journey_block]")
           done
 
-  
           payload=$(printf '%s' "$message")
+          echo "Payload to be sent to Slack:"
           echo $payload
           curl -X POST -H 'Content-type: application/json' --data "$payload" "${{ secrets.SLACK_WEBHOOK_URL }}"
         fi
-
 
     - name: Final Job Status
       if: always()
