@@ -82,11 +82,43 @@ jobs:
           echo "Journeys data:"
           echo "$journeys"
           
-          message="*CI/CD Test Suite Status:* ${status}\n"
-          message+="*Total Duration:* ${duration}s\n\n"
-          message+="*Journeys:*\n"
+          # Color based on status
+          if [ "$status" == "PASSED" ]; then
+            status_color="good"
+          else
+            status_color="danger"
+          fi
 
-          # Loop through each journey to format it nicely
+          # Constructing the message blocks for Slack
+          message=$(cat <<EOF
+          {
+            "blocks": [
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "*CI/CD Test Suite Status:* ${status}"
+                }
+              },
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "*Total Duration:* ${duration}s"
+                }
+              },
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "*Journeys:*"
+                }
+              }
+            ]
+          }
+          EOF
+          )
+
           for row in $(echo "${journeys}" | jq -r '.[] | @base64'); do
               _jq() {
                   echo ${row} | base64 --decode | jq -r ${1}
@@ -100,21 +132,32 @@ jobs:
               browser=$(_jq '.browser')
               device=$(_jq '.device')
 
-              message+="\n*Journey ID:* ${journeyId}\n"
-              message+="*Journey Run ID:* ${journeyRunId}\n"
-              message+="*Status:* ${status}\n"
-              message+="*Report URL:* <${reportUrl}|Report>\n"
-              message+="*Duration:* ${duration}ms\n"
-              message+="*Browser:* ${browser}\n"
-              message+="*Device:* ${device}\n"
+              # Convert duration to seconds
+              duration=$(echo "scale=3; $duration / 1000" | bc)
+
+              journey_block=$(cat <<EOF
+            {
+              "type": "section",
+              "text": {
+                "type": "mrkdwn",
+                "text": "```Journey ID: ${journeyId}\nJourney Run ID: ${journeyRunId}\nStatus: ${status}\nReport URL: <${reportUrl}|Report>\nDuration: ${duration}s\nBrowser: ${browser}\nDevice: ${device}```"
+              }
+            }
+            EOF
+            )
+
+              # Append journey block to the message
+              message=$(echo $message | jq ".blocks += [$journey_block]")
           done
 
           # Escape double quotes for the JSON payload
           message=${message//\"/\\\"}
-          payload=$(printf '{"text": "%s"}' "$message")
+          payload=$(printf '{"blocks": %s}' "$message")
           echo $payload
           curl -X POST -H 'Content-type: application/json' --data "$payload" "${{ secrets.SLACK_WEBHOOK_URL }}"
+        
         fi
+
 
     - name: Final Job Status
       if: always()
