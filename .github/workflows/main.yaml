@@ -43,7 +43,6 @@ jobs:
           response=$(curl -X GET "https://app.beta.api.autoflow.tools/api/v1/ci-cd/trigger/test-run/$bucket_run_id/status" \
           -H "CI-CD-Token: ${{ secrets.CI_CD_TOKEN }}" \
           -H "Content-Type: application/json")
-          echo "Response: $response"
           status=$(echo $response | jq -r '.status')
           if [[ "$status" == "PASSED" || "$status" == "FAILED" ]]; then
             break
@@ -63,12 +62,6 @@ jobs:
         echo "response=$response" >> $GITHUB_ENV
         echo $response > response.json
 
-    - name: Debug Journey Data
-      run: |
-        response=$(cat response.json)
-        journeys=$(echo $response | jq -r '.journeys')
-        echo "Journeys data:"
-        echo "$journeys"
 
     - name: Send Slack Notification
       if: always()
@@ -82,6 +75,8 @@ jobs:
           status=$(echo $response | jq -r '.status')
           duration=$(echo $response | jq -r '.duration')
           journeys=$(echo $response | jq '.journeys') # Keep it as the array
+          echo "Journeys data:"
+          echo "$journeys"
           
           message="*CI/CD Test Suite Status:* ${status}\n"
           message+="*Total Duration:* ${duration}ms\n\n"
