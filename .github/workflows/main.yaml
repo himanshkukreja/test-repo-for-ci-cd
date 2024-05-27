@@ -20,6 +20,7 @@ jobs:
         -d '{"environmentId": null, "environmentOverrides": null }' \
         -H "CI-CD-Token: ${{ secrets.CI_CD_TOKEN }}" \
         -H "Content-Type: application/json")
+        echo "Response: $response"
         bucket_run_id=$(echo $response | jq -r '.bucketRunID')
         if [ -z "$bucket_run_id" ]; then
           echo "Failed to trigger test run"
@@ -41,7 +42,7 @@ jobs:
         status=""
         response=""
         for i in {1..30}; do
-          response=$(curl -X GET "https://app.beta.api.autoflow.tools/api/v1/ci-cd/trigger/test-run/$bucket_run_id/status " \
+          response=$(curl -X GET "https://app.beta.api.autoflow.tools/api/v1/ci-cd/trigger/test-run/$bucket_run_id/status" \
           -H "CI-CD-Token: ${{ secrets.CI_CD_TOKEN }}" \
           -H "Content-Type: application/json")
           echo "Response: $response"
