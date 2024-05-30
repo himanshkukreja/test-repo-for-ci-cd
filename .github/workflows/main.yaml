@@ -37,6 +37,7 @@ jobs:
           echo "Skipping polling due to trigger failure"
           exit 0
         fi
+        
 
         bucket_run_id=${{ env.bucket_run_id }}
         status=""
